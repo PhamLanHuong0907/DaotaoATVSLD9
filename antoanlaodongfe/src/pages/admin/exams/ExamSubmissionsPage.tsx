@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Typography, Box, Skeleton, IconButton, Tooltip, Chip,
@@ -9,7 +8,7 @@ import PageHeader from '@/components/common/PageHeader';
 import ClassificationChip from '@/components/common/ClassificationChip';
 import EmptyState from '@/components/common/EmptyState';
 import { usePeriodSubmissions } from '@/hooks/useSubmissions';
-import { formatScore, formatDateTime } from '@/utils/formatters';
+import { formatScore } from '@/utils/formatters';
 
 export default function ExamSubmissionsPage() {
   const { periodId } = useParams<{ periodId: string }>();
@@ -19,8 +18,8 @@ export default function ExamSubmissionsPage() {
 
   return (
     <>
-      <PageHeader 
-        title="Danh sách bài nộp kỳ thi" 
+      <PageHeader
+        title="Danh sách bài nộp kỳ thi"
         subtitle="Tổng hợp kết quả từ tất cả phòng thi"
         action={
           <Tooltip title="Xuất báo cáo kết quả">
@@ -46,7 +45,7 @@ export default function ExamSubmissionsPage() {
               Tổng số bài nộp: <strong>{submissions.length}</strong>
             </Typography>
           </Box>
-          
+
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
               <TableHead>

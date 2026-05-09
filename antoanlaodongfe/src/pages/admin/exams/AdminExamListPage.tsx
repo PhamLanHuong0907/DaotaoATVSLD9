@@ -5,7 +5,7 @@ import {
   Pagination, Skeleton, Chip, IconButton, Tooltip, Stack,
   InputAdornment,
 } from '@mui/material';
-import { Add, Quiz, Assignment, Delete, Search, Send } from '@mui/icons-material';
+import { Add, Quiz, Delete, Search, Send } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';

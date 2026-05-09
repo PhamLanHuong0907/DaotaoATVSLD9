@@ -280,9 +280,7 @@ export default function DocumentListPage() {
             <Button variant="outlined" startIcon={<Upload />} onClick={() => { setUploadMode('upload'); setUploadDialogOpen(true); }}>
               Tải lên
             </Button>
-            <Button variant="contained" startIcon={<AutoAwesome />} onClick={() => { setUploadMode('generate'); setUploadDialogOpen(true); }}>
-              AI tạo nội dung
-            </Button>
+
           </Stack>
         }
       />
