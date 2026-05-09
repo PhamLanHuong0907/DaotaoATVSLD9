@@ -130,13 +130,13 @@ export default function AppRouter() {
           <Route path="/admin/exams" element={<RequireRole roles={STAFF_ROLES}><AdminExamListPage /></RequireRole>} />
           <Route path="/admin/exams/generate" element={<RequireRole roles={STAFF_ROLES}><ExamGeneratePage /></RequireRole>} />
           <Route path="/admin/exams/:examId" element={<RequireRole roles={STAFF_ROLES}><ExamDetailPage /></RequireRole>} />
-          <Route path="/admin/exams/:examId/submissions" element={<RequireRole roles={STAFF_ROLES}><ExamSubmissionsPage /></RequireRole>} />
 
           {/* Admin - Exam Periods (kỳ thi) */}
           <Route path="/admin/periods" element={<RequireRole roles={STAFF_ROLES}><PeriodListPage /></RequireRole>} />
           <Route path="/admin/periods/create" element={<RequireRole roles={STAFF_ROLES}><PeriodFormPage /></RequireRole>} />
           <Route path="/admin/periods/:periodId" element={<RequireRole roles={STAFF_ROLES}><PeriodDetailPage /></RequireRole>} />
           <Route path="/admin/periods/:periodId/edit" element={<RequireRole roles={STAFF_ROLES}><PeriodFormPage /></RequireRole>} />
+          <Route path="/admin/periods/:periodId/submissions" element={<RequireRole roles={STAFF_ROLES}><ExamSubmissionsPage /></RequireRole>} />
 
           {/* Admin - Exam Rooms (phòng thi) */}
           <Route path="/admin/rooms" element={<RequireRole roles={STAFF_ROLES}><RoomListPage /></RequireRole>} />

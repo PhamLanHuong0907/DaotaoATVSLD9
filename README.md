@@ -17,7 +17,21 @@ Hệ thống được thiết kế với 4 vai trò chính:
 
 ---
 
-## 2. Quy trình & Điều kiện Chỉnh sửa (Workflow & Constraints)
+## 2. Quy trình Thêm dữ liệu (Data Setup Workflow)
+
+Để tổ chức một kỳ thi chính thức, quản trị viên thực hiện theo trình tự sau:
+
+1.  **Bước 1: Danh mục (Catalogs)**: Cập nhật Ngành nghề, Bậc kỹ năng và Loại chứng chỉ.
+2.  **Bước 2: Ngân hàng câu hỏi**: Thêm câu hỏi và Gửi duyệt. Câu hỏi phải ở trạng thái **Đã duyệt** mới có thể dùng để tạo đề.
+3.  **Bước 3: Mẫu đề thi (Templates)**: Thiết lập ma trận đề (số lượng câu theo độ khó/chủ đề). Gửi duyệt mẫu đề.
+4.  **Bước 4: Kỳ thi (Periods)**: Tạo Kỳ thi tổng thể (ví dụ: "Thi sát hạch ATLD Quý 1/2024"), thiết lập thời gian bắt đầu/kết thúc.
+5.  **Bước 5: Đề thi (Exams)**: Tạo Đề thi từ Mẫu đề đã duyệt, gán vào Kỳ thi đã tạo.
+6.  **Bước 6: Phòng thi (Rooms)**: Tạo các Phòng thi thuộc Kỳ thi, gán Đề thi và danh sách Thí sinh (Candidates).
+7.  **Bước 7: Phê duyệt**: Gửi duyệt Kỳ thi và Phòng thi để chuyển sang trạng thái **Chính thức**.
+
+---
+
+## 3. Quy trình & Điều kiện Chỉnh sửa (Workflow & Constraints)
 
 ### A. Ngân hàng câu hỏi (Question Bank)
 *   **Quy trình**: Nhập từ Excel/Thêm mới -> **Nháp (Draft)** -> **Chờ duyệt (Pending)** -> **Đã duyệt (Approved)**.

@@ -26,3 +26,11 @@ export function useExamSubmissions(examId: string, page: number, pageSize: numbe
     placeholderData: (prev) => prev,
   });
 }
+
+export function usePeriodSubmissions(periodId: string) {
+  return useQuery({
+    queryKey: ['period-submissions', periodId],
+    queryFn: () => submissionApi.listByPeriod(periodId),
+    enabled: !!periodId,
+  });
+}

@@ -301,11 +301,6 @@ export default function AdminExamListPage() {
                                       <Quiz fontSize="small" />
                                     </IconButton>
                                   </Tooltip>
-                                  <Tooltip title="Xem bài nộp">
-                                    <IconButton size="small" color="secondary" onClick={() => navigate(`/admin/exams/${exam.id}/submissions`)}>
-                                      <Assignment fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
         
                                   <Tooltip title={canModify ? "Gửi yêu cầu duyệt" : "Đã gửi yêu cầu hoặc đã được duyệt"}>
                                     <span>

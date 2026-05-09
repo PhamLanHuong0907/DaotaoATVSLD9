@@ -11,4 +11,7 @@ export const submissionApi = {
 
   listByUser: (userId: string, params: { page?: number; page_size?: number; exam_kind?: string }) =>
     apiClient.get<PaginatedResponse<SubmissionResponse>>(`/exams/submissions/user/${userId}`, { params }).then((r) => r.data),
+
+  listByPeriod: (periodId: string) =>
+    apiClient.get<any[]>(`/exams/period/${periodId}/submissions`).then((r) => r.data),
 };

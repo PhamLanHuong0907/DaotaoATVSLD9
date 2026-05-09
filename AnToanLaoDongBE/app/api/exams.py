@@ -368,3 +368,7 @@ async def delete_exam(exam_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Exam not found")
     return StatusResponse(success=True, message="Exam deleted")
+
+@router.get("/period/{period_id}/submissions")
+async def list_period_submissions(period_id: str):
+    return await exam_service.get_period_submissions(period_id)

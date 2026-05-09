@@ -4,7 +4,7 @@ import {
   TableHead, TableRow, TextField, MenuItem, Typography, Pagination,
   IconButton, Tooltip, Chip, Skeleton,
 } from '@mui/material';
-import { Add, Edit, Delete, Visibility, Send } from '@mui/icons-material';
+import { Add, Edit, Delete, Visibility, Send, Assignment } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import dayjs from 'dayjs';
@@ -125,6 +125,13 @@ export default function PeriodListPage() {
                                   <Visibility fontSize="small" />
                                 </IconButton>
                               </Tooltip>
+                              
+                              <Tooltip title="Xem kết quả thi">
+                                <IconButton size="small" color="secondary" onClick={() => navigate(`/admin/periods/${p.id}/submissions`)}>
+                                  <Assignment fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+
                               <Tooltip title={canModify ? "Sửa" : "Không thể sửa khi đã gửi duyệt hoặc được chấp thuận"}>
                                 <span>
                                   <IconButton 

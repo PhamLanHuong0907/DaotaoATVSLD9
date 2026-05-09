@@ -489,3 +489,62 @@ async def delete_exam(exam_id: str) -> bool:
         
     await exam.delete()
     return True
+
+async def get_period_submissions(period_id: str) -> list[dict]:
+    """Get all submissions for an exam period with enriched user and room data."""
+    from app.models.user import User
+    from app.models.exam_room import ExamRoom
+    from app.models.department import Department
+    
+    # 1. Get all exams in this period
+    exams = await Exam.find(Exam.exam_period_id == period_id).to_list()
+    exam_ids = [str(e.id) for e in exams]
+    exam_map = {str(e.id): e for e in exams}
+    
+    if not exam_ids:
+        return []
+        
+    # 2. Get all submissions for these exams
+    submissions = await ExamSubmission.find({"exam_id": {"$in": exam_ids}}).sort("-submitted_at").to_list()
+    
+    # 3. Get all rooms in this period to link users to rooms
+    rooms = await ExamRoom.find(ExamRoom.exam_period_id == period_id).to_list()
+    
+    # Create a mapping of user_id -> room_name for this period
+    user_room_map = {}
+    for r in rooms:
+        for c in r.candidates:
+            user_room_map[c.user_id] = r.name
+            
+    # 4. Enrich submissions with User and Exam data
+    enriched = []
+    user_ids = list(set(s.user_id for s in submissions))
+    users = await User.find({"_id": {"$in": [PydanticObjectId(uid) for uid in user_ids]}}).to_list()
+    user_map = {str(u.id): u for u in users}
+    
+    # Get departments for mapping
+    depts = await Department.find_all().to_list()
+    dept_map = {str(d.id): d.name for d in depts}
+    
+    for s in submissions:
+        user = user_map.get(s.user_id)
+        exam = exam_map.get(s.exam_id)
+        
+        item = {
+            "id": str(s.id),
+            "user_id": s.user_id,
+            "employee_id": user.employee_id if user else "N/A",
+            "full_name": user.full_name if user else "Unknown",
+            "department": dept_map.get(user.department_id, "N/A") if user else "N/A",
+            "occupation": exam.occupation if exam else "N/A",
+            "skill_level": exam.skill_level if exam else 0,
+            "room_name": user_room_map.get(s.user_id, "N/A"),
+            "total_score": s.total_score,
+            "classification": s.classification.value if s.classification else "N/A",
+            "submitted_at": s.submitted_at,
+            "total_correct": s.total_correct,
+            "total_questions": s.total_questions,
+        }
+        enriched.append(item)
+        
+    return enriched
