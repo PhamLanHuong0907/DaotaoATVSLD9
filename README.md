@@ -22,12 +22,13 @@ Hệ thống được thiết kế với 4 vai trò chính:
 Để tổ chức một kỳ thi chính thức, quản trị viên thực hiện theo trình tự sau:
 
 1.  **Bước 1: Danh mục (Catalogs)**: Cập nhật Ngành nghề, Bậc kỹ năng và Loại chứng chỉ.
-2.  **Bước 2: Ngân hàng câu hỏi**: Thêm câu hỏi và Gửi duyệt. Câu hỏi phải ở trạng thái **Đã duyệt** mới có thể dùng để tạo đề.
-3.  **Bước 3: Mẫu đề thi (Templates)**: Thiết lập ma trận đề (số lượng câu theo độ khó/chủ đề). Gửi duyệt mẫu đề.
-4.  **Bước 4: Kỳ thi (Periods)**: Tạo Kỳ thi tổng thể (ví dụ: "Thi sát hạch ATLD Quý 1/2024"), thiết lập thời gian bắt đầu/kết thúc.
-5.  **Bước 5: Đề thi (Exams)**: Tạo Đề thi từ Mẫu đề đã duyệt, gán vào Kỳ thi đã tạo.
-6.  **Bước 6: Phòng thi (Rooms)**: Tạo các Phòng thi thuộc Kỳ thi, gán Đề thi và danh sách Thí sinh (Candidates).
-7.  **Bước 7: Phê duyệt**: Gửi duyệt Kỳ thi và Phòng thi để chuyển sang trạng thái **Chính thức**.
+2.  **Bước 2: Tải tài liệu lên (Documents)**: Upload tài liệu đào tạo (PDF, DOCX,...) lên **Kho tài liệu**. Tài liệu sẽ được AI phân tích để tự động tạo Khóa học và Câu hỏi (nếu dùng tính năng AI). Tài liệu cần được duyệt trước khi sử dụng.
+3.  **Bước 3: Ngân hàng câu hỏi**: Thêm câu hỏi thủ công hoặc import từ file Excel, sau đó Gửi duyệt. Câu hỏi phải ở trạng thái **Đã duyệt** mới có thể dùng để tạo đề.
+4.  **Bước 4: Mẫu đề thi (Templates)**: Thiết lập ma trận đề (số lượng câu theo độ khó/chủ đề/ngành nghề). Gửi duyệt mẫu đề.
+5.  **Bước 5: Kỳ thi (Periods)**: Tạo Kỳ thi tổng thể (ví dụ: "Thi sát hạch ATLD Quý 1/2024"), thiết lập thời gian bắt đầu/kết thúc và chọn phòng ban áp dụng.
+6.  **Bước 6: Đề thi (Exams)**: Tạo Đề thi từ Mẫu đề đã duyệt, gán vào Kỳ thi đã tạo.
+7.  **Bước 7: Phòng thi (Rooms)**: Tạo các Phòng thi thuộc Kỳ thi, gán Đề thi và danh sách Thí sinh (Candidates).
+8.  **Bước 8: Phê duyệt**: Gửi duyệt Kỳ thi và Phòng thi để chuyển sang trạng thái **Chính thức**. Sau khi duyệt, thí sinh có thể vào làm bài.
 
 ---
 
@@ -62,7 +63,26 @@ Hệ thống được thiết kế với 4 vai trò chính:
 
 ---
 
-## 3. Quy trình học & Thi (Worker Workflow)
+## 4. Quy trình Xem kết quả thi (Admin / Training Officer)
+
+Sau khi kỳ thi kết thúc hoặc đang diễn ra, cán bộ đào tạo/Admin có thể xem kết quả thi theo các bước sau:
+
+1.  Vào menu **Quản lý kỳ thi** (Admin sidebar).
+2.  Tìm Kỳ thi cần xem → nhấn nút **Xem kết quả thi** (icon biểu mẫu 📋).
+3.  Hệ thống chuyển đến trang **Danh sách bài nộp**, hiển thị tổng hợp từ tất cả Phòng thi trong Kỳ thi đó.
+4.  Bảng kết quả gồm các cột:
+    *   **Phòng thi** (tên phòng, có thể lọc)
+    *   **Mã nhân viên** & **Họ tên**
+    *   **Phòng ban**, **Nghề**, **Bậc**
+    *   **Điểm thi** (số câu đúng / tổng câu)
+    *   **Kết quả** (Đạt / Không đạt dựa trên điểm chuẩn)
+5.  Có thể **Xuất báo cáo** (nút Download) để lưu danh sách kết quả ra file.
+
+> **Lưu ý**: Tính năng xem bài nộp được tập trung tại **Kỳ thi**, không nằm ở từng Đề thi riêng lẻ.
+
+---
+
+## 5. Quy trình học & Thi (Worker Workflow)
 
 1.  **Học tập**: 
     *   Worker vào mục "Học tập" để thấy các khóa học được gán.
@@ -76,7 +96,7 @@ Hệ thống được thiết kế với 4 vai trò chính:
 
 ---
 
-## 4. Các nút chức năng (UI Logic)
+## 6. Các nút chức năng (UI Logic)
 
 Để tránh sai sót dữ liệu, hệ thống áp dụng logic hiển thị nút như sau:
 *   **Nút màu xám (Disabled)**: Xuất hiện khi bản ghi ở trạng thái không cho phép thao tác (Ví dụ: Nút Xóa bị xám khi Đề thi đã Duyệt).
@@ -84,4 +104,4 @@ Hệ thống được thiết kế với 4 vai trò chính:
 *   **Chuột dạng cấm (Not-allowed)**: Trạng thái chuột khi trỏ vào các vùng bị khóa.
 
 ---
-*Tài liệu này được cập nhật tự động bởi hệ thống hỗ trợ kỹ thuật.*
+*Tài liệu này được cập nhật ngày 09/05/2026.*

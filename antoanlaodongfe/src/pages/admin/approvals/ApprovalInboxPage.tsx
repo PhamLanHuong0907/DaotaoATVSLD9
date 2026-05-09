@@ -1,23 +1,32 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Card, CardContent, Chip, Stack, Typography, Button, Tabs, Tab, IconButton,
   Tooltip, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  List, ListItem, ListItemText, Divider, Avatar,
+  List, ListItem, ListItemText, Divider, Avatar, Checkbox, MenuItem,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import {
   CheckCircle, Cancel, OpenInNew, Description, School, Assignment, QuestionAnswer, MeetingRoom,
   Edit as EditExamIcon, Event, Chat as ChatIcon, Send as SendIcon,
+  SelectAll, IndeterminateCheckBox,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { approvalApi, type PendingType, type PendingItem } from '@/api/approvalApi';
+
+// Cấu hình dayjs hiển thị theo múi giờ GMT+7
+dayjs.extend(utc);
+dayjs.extend(timezone);
+const TZ = 'Asia/Ho_Chi_Minh';
+const fmtTime = (ts: string) => dayjs.utc(ts).tz(TZ).format('DD/MM/YYYY HH:mm');
 
 const TYPE_LABEL: Record<PendingType, string> = {
   document: 'Tài liệu',
@@ -60,6 +69,14 @@ const TABS: Array<{ value: PendingType | ''; label: string }> = [
   { value: 'exam', label: 'Đề thi' },
 ];
 
+// Dropdown lọc theo quyền hành động
+type ActionFilter = 'all' | 'can_approve' | 'view_only';
+const ACTION_FILTER_OPTIONS: Array<{ value: ActionFilter; label: string }> = [
+  { value: 'all', label: 'Tất cả mục' },
+  { value: 'can_approve', label: 'Cần duyệt' },
+  { value: 'view_only', label: 'Chỉ xem' },
+];
+
 export default function ApprovalInboxPage() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
@@ -67,6 +84,10 @@ export default function ApprovalInboxPage() {
   const { user } = useAuth();
 
   const [tab, setTab] = useState<PendingType | ''>('');
+  const [actionFilter, setActionFilter] = useState<ActionFilter>('all');
+
+  // Checkbox selection state
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery({
     queryKey: ['approval-inbox', tab],
@@ -74,8 +95,9 @@ export default function ApprovalInboxPage() {
   });
 
   const [reviewing, setReviewing] = useState<{ item: PendingItem; action: 'approve' | 'reject' } | null>(null);
+  const [bulkAction, setBulkAction] = useState<'approve' | 'reject' | null>(null);
   const [notes, setNotes] = useState('');
-  
+
   // Comments state
   const [commentItem, setCommentItem] = useState<PendingItem | null>(null);
   const [commentText, setCommentText] = useState('');
@@ -87,7 +109,7 @@ export default function ApprovalInboxPage() {
   });
 
   const commentMutation = useMutation({
-    mutationFn: ({ type, id, content }: { type: PendingType, id: string, content: string }) => 
+    mutationFn: ({ type, id, content }: { type: PendingType, id: string, content: string }) =>
       approvalApi.addComment(type, id, content),
     onSuccess: () => {
       setCommentText('');
@@ -113,6 +135,72 @@ export default function ApprovalInboxPage() {
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.detail || e.message, { variant: 'error' }),
   });
 
+  const canApproveItem = (item: PendingItem) => {
+    if (user?.role === 'admin') return true;
+    if (user?.role !== 'manager') return false;
+    if (item.requested_to) {
+      return item.requested_to === user?.id;
+    }
+    return true;
+  };
+
+  // Lọc items theo actionFilter
+  const filteredItems = useMemo(() => {
+    if (!data?.items) return [];
+    if (actionFilter === 'all') return data.items;
+    if (actionFilter === 'can_approve') return data.items.filter((item) => canApproveItem(item));
+    if (actionFilter === 'view_only') return data.items.filter((item) => !canApproveItem(item));
+    return data.items;
+  }, [data?.items, actionFilter, user]);
+
+  // Items có thể duyệt trong danh sách đang hiển thị
+  const approvableItems = filteredItems.filter((item) => canApproveItem(item));
+  const approvableIds = approvableItems.map((item) => `${item.type}::${item.id}`);
+
+  // Checkbox helpers
+  const toggleSelect = (key: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const isAllSelected = approvableIds.length > 0 && approvableIds.every((k) => selected.has(k));
+  const isSomeSelected = approvableIds.some((k) => selected.has(k)) && !isAllSelected;
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(approvableIds));
+    }
+  };
+
+  // Bulk approve/reject
+  const handleBulkSubmit = async () => {
+    if (!bulkAction || selected.size === 0) return;
+    const targets = filteredItems.filter((item) => selected.has(`${item.type}::${item.id}`) && canApproveItem(item));
+    let successCount = 0;
+    for (const item of targets) {
+      try {
+        if (bulkAction === 'approve') {
+          await approvalApi.approve(item.type, item.id, notes || undefined);
+        } else {
+          await approvalApi.reject(item.type, item.id, notes || undefined);
+        }
+        successCount++;
+      } catch {
+        // continue
+      }
+    }
+    enqueueSnackbar(`${bulkAction === 'approve' ? 'Đã duyệt' : 'Đã từ chối'} ${successCount}/${targets.length} mục`, { variant: 'success' });
+    qc.invalidateQueries({ queryKey: ['approval-inbox'] });
+    setSelected(new Set());
+    setBulkAction(null);
+    setNotes('');
+  };
+
   const handleSubmit = () => {
     if (!reviewing) return;
     reviewMutation.mutate({
@@ -132,22 +220,13 @@ export default function ApprovalInboxPage() {
     });
   };
 
-  const canApproveItem = (item: PendingItem) => {
-    if (user?.role === 'admin') return true;
-    if (user?.role !== 'manager') return false;
-    if (item.requested_to) {
-      return item.requested_to === user?.id;
-    }
-    return true; // if no specific reviewer, any manager in the allowed dept can approve
-  };
-
   return (
     <>
       <PageHeader
         title="Hộp duyệt"
         subtitle="Toàn bộ tài liệu, câu hỏi, mẫu đề, kỳ thi, đề thi và phòng thi chờ phê duyệt"
       />
-      
+
       {/* Summary cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {(['document', 'course', 'exam_template', 'question', 'exam_period', 'exam_room', 'exam'] as PendingType[]).map((t) => (
@@ -167,96 +246,169 @@ export default function ApprovalInboxPage() {
         ))}
       </Grid>
 
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-        {TABS.map((t) => (
-          <Tab key={t.value || 'all'} value={t.value} label={t.label} />
-        ))}
-      </Tabs>
+      {/* Filter bar: Tabs (loại) + Dropdown (quyền hành động) */}
+      <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1} sx={{ mb: 1 }}>
+        <Tabs value={tab} onChange={(_, v) => { setTab(v); setSelected(new Set()); }} variant="scrollable" scrollButtons="auto">
+          {TABS.map((t) => (
+            <Tab key={t.value || 'all'} value={t.value} label={t.label} />
+          ))}
+        </Tabs>
+        <TextField
+          select
+          size="small"
+          label="Lọc theo quyền"
+          value={actionFilter}
+          onChange={(e) => { setActionFilter(e.target.value as ActionFilter); setSelected(new Set()); }}
+          sx={{ minWidth: 220 }}
+        >
+          {ACTION_FILTER_OPTIONS.map((o) => (
+            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+          ))}
+        </TextField>
+      </Stack>
+
+      {/* Bulk action toolbar — chỉ hiện khi có item được chọn */}
+      {selected.size > 0 && (
+        <Paper variant="outlined" sx={{ px: 2, py: 1, mb: 1, bgcolor: 'primary.50', display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="body2" fontWeight={600}>
+            Đã chọn {selected.size} mục
+          </Typography>
+          <Button
+            size="small" variant="contained" color="success" startIcon={<CheckCircle />}
+            onClick={() => { setBulkAction('approve'); setNotes(''); }}
+          >
+            Duyệt tất cả
+          </Button>
+          <Button
+            size="small" variant="outlined" color="error" startIcon={<Cancel />}
+            onClick={() => { setBulkAction('reject'); setNotes(''); }}
+          >
+            Từ chối tất cả
+          </Button>
+          <Button size="small" onClick={() => setSelected(new Set())}>Bỏ chọn</Button>
+        </Paper>
+      )}
 
       {isLoading ? (
         <Paper sx={{ p: 3 }}><Typography>Đang tải...</Typography></Paper>
-      ) : !data?.items.length ? (
-        <EmptyState
-          message="Hộp duyệt trống — không có gì cần xử lý"
-        />
+      ) : !filteredItems.length ? (
+        <EmptyState message="Không có mục nào phù hợp với bộ lọc" />
       ) : (
         <Paper variant="outlined">
+          {/* Header row với checkbox Chọn tất cả */}
+          {approvableItems.length > 0 && (
+            <Box sx={{ px: 2, py: 1, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'grey.50' }}>
+              <Tooltip title={isAllSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả có thể duyệt'}>
+                <Checkbox
+                  size="small"
+                  checked={isAllSelected}
+                  indeterminate={isSomeSelected}
+                  onChange={toggleSelectAll}
+                  icon={<SelectAll fontSize="small" />}
+                  indeterminateIcon={<IndeterminateCheckBox fontSize="small" />}
+                />
+              </Tooltip>
+              <Typography variant="caption" color="text.secondary">
+                Chọn tất cả ({approvableItems.length} mục có thể duyệt)
+              </Typography>
+            </Box>
+          )}
+
           <List disablePadding>
-            {data.items.map((item, i) => (
-              <Box key={`${item.type}-${item.id}`}>
-                {i > 0 && <Divider />}
-                <ListItem
-                  secondaryAction={
-                    <Stack direction="row" spacing={0.5}>
-                      <Tooltip title="Mở chi tiết">
-                        <IconButton size="small" onClick={() => navigate(TYPE_LINK[item.type](item.id))}>
-                          <OpenInNew fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Ý kiến / Bình luận">
-                        <IconButton size="small" color="primary" onClick={() => setCommentItem(item)}>
-                          <ChatIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      {canApproveItem(item) && (
-                        <>
-                          <Tooltip title="Phê duyệt">
-                            <IconButton
-                              size="small" color="success"
-                              onClick={() => { setReviewing({ item, action: 'approve' }); setNotes(''); }}
-                            >
-                              <CheckCircle fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Từ chối">
-                            <IconButton
-                              size="small" color="error"
-                              onClick={() => { setReviewing({ item, action: 'reject' }); setNotes(''); }}
-                            >
-                              <Cancel fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </>
-                      )}
-                    </Stack>
-                  }
-                >
-                  <ListItemText
-                    primary={
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Chip
-                          size="small" icon={TYPE_ICON[item.type] as React.ReactElement}
-                          label={TYPE_LABEL[item.type]} variant="outlined"
-                        />
-                        <Typography variant="body1" fontWeight={500}>
-                          {item.title}
-                        </Typography>
-                        {item.requested_to && item.requested_to !== user?.id && (
-                          <Chip size="small" label="Chỉ xem" color="default" variant="filled" />
+            {filteredItems.map((item, i) => {
+              const key = `${item.type}::${item.id}`;
+              const canApprove = canApproveItem(item);
+              const isSelected = selected.has(key);
+
+              return (
+                <Box key={key}>
+                  {i > 0 && <Divider />}
+                  <ListItem
+                    sx={{ bgcolor: isSelected ? 'primary.50' : undefined }}
+                    secondaryAction={
+                      <Stack direction="row" spacing={0.5}>
+                        <Tooltip title="Mở chi tiết">
+                          <IconButton size="small" onClick={() => navigate(TYPE_LINK[item.type](item.id))}>
+                            <OpenInNew fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Ý kiến / Bình luận">
+                          <IconButton size="small" color="primary" onClick={() => setCommentItem(item)}>
+                            <ChatIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {canApprove && (
+                          <>
+                            <Tooltip title="Phê duyệt">
+                              <IconButton
+                                size="small" color="success"
+                                onClick={() => { setReviewing({ item, action: 'approve' }); setNotes(''); }}
+                              >
+                                <CheckCircle fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Từ chối">
+                              <IconButton
+                                size="small" color="error"
+                                onClick={() => { setReviewing({ item, action: 'reject' }); setNotes(''); }}
+                              >
+                                <Cancel fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </>
                         )}
                       </Stack>
                     }
-                    secondary={
-                      <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
-                        {item.occupation && (
-                          <Typography variant="caption" color="text.secondary">
-                            {item.occupation}{item.skill_level !== null ? ` · Bậc ${item.skill_level}` : ''}
+                  >
+                    {/* Checkbox cột đầu — chỉ hiện nếu có quyền duyệt */}
+                    {canApprove ? (
+                      <Checkbox
+                        size="small"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(key)}
+                        sx={{ mr: 1 }}
+                      />
+                    ) : (
+                      <Box sx={{ width: 42 }} /> // placeholder giữ layout thẳng hàng
+                    )}
+
+                    <ListItemText
+                      primary={
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Chip
+                            size="small" icon={TYPE_ICON[item.type] as React.ReactElement}
+                            label={TYPE_LABEL[item.type]} variant="outlined"
+                          />
+                          <Typography variant="body1" fontWeight={500}>
+                            {item.title}
                           </Typography>
-                        )}
-                        <Typography variant="caption" color="text.secondary">
-                          Tạo lúc: {dayjs(item.created_at).format('DD/MM/YYYY HH:mm')}
-                        </Typography>
-                      </Stack>
-                    }
-                  />
-                </ListItem>
-              </Box>
-            ))}
+                          {!canApprove && (
+                            <Chip size="small" label="Chỉ xem" color="default" variant="filled" />
+                          )}
+                        </Stack>
+                      }
+                      secondary={
+                        <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                          {item.occupation && (
+                            <Typography variant="caption" color="text.secondary">
+                              {item.occupation}{item.skill_level !== null ? ` · Bậc ${item.skill_level}` : ''}
+                            </Typography>
+                          )}
+                          <Typography variant="caption" color="text.secondary">
+                            Tạo lúc: {fmtTime(item.created_at)} (GMT+7)
+                          </Typography>
+                        </Stack>
+                      }
+                    />
+                  </ListItem>
+                </Box>
+              );
+            })}
           </List>
         </Paper>
       )}
 
-      {/* Review Dialog */}
+      {/* Review Dialog — duyệt từng item */}
       <Dialog open={!!reviewing} onClose={() => setReviewing(null)} fullWidth maxWidth="sm">
         <DialogTitle>
           {reviewing?.action === 'approve' ? 'Phê duyệt' : 'Từ chối'}: {reviewing?.item.title}
@@ -285,6 +437,35 @@ export default function ApprovalInboxPage() {
         </DialogActions>
       </Dialog>
 
+      {/* Bulk Review Dialog */}
+      <Dialog open={!!bulkAction} onClose={() => setBulkAction(null)} fullWidth maxWidth="sm">
+        <DialogTitle>
+          {bulkAction === 'approve' ? 'Duyệt nhanh' : 'Từ chối nhanh'} {selected.size} mục đã chọn
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth multiline minRows={3}
+            label={bulkAction === 'approve' ? 'Ghi chú (áp dụng cho tất cả, tuỳ chọn)' : 'Lý do từ chối (áp dụng cho tất cả)'}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            sx={{ mt: 1 }}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkAction(null)}>Hủy</Button>
+          <Button
+            variant="contained"
+            color={bulkAction === 'approve' ? 'success' : 'error'}
+            onClick={handleBulkSubmit}
+            disabled={bulkAction === 'reject' && !notes.trim()}
+            startIcon={bulkAction === 'approve' ? <CheckCircle /> : <Cancel />}
+          >
+            {bulkAction === 'approve' ? 'Duyệt tất cả' : 'Từ chối tất cả'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Comment Dialog */}
       <Dialog open={!!commentItem} onClose={() => setCommentItem(null)} fullWidth maxWidth="sm">
         <DialogTitle>
@@ -307,7 +488,7 @@ export default function ApprovalInboxPage() {
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Typography variant="subtitle2">{c.user_name}</Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {dayjs(c.created_at).format('DD/MM/YYYY HH:mm')}
+                          {fmtTime(c.created_at)} (GMT+7)
                         </Typography>
                       </Stack>
                       <Paper variant="outlined" sx={{ p: 1, mt: 0.5, bgcolor: c.user_id === user?.id ? 'primary.50' : 'grey.50' }}>
@@ -335,9 +516,9 @@ export default function ApprovalInboxPage() {
                   }
                 }}
               />
-              <IconButton 
-                color="primary" 
-                onClick={handleSendComment} 
+              <IconButton
+                color="primary"
+                onClick={handleSendComment}
                 disabled={!commentText.trim() || commentMutation.isPending}
               >
                 <SendIcon />

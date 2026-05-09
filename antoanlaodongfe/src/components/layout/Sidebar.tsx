@@ -90,7 +90,7 @@ function UserProfileMenu({ user, onLogout }: { user: any; onLogout: () => void }
         sx={{
           display: 'flex',
           alignItems: 'center',
-          gap: 1.5,
+          gap: 1,
           cursor: 'pointer',
           p: 0.5,
           px: 1,
@@ -192,31 +192,26 @@ const getNavConfig = (user: any): NavItem[] => {
       );
     }
 
-    // 2. Hệ thống
-    const systemChildren: NavItem[] = [];
+    // 2. Hộp duyệt — hiển thị độc lập, cùng level với Quản lý kỳ thi (tất cả staff đều thấy)
+    baseNav.push({ label: 'Hộp duyệt', path: '/admin/approvals', icon: <InboxIcon /> });
 
-    // Hộp duyệt (Tất cả staff đều thấy - training_officer sẽ bị giới hạn UI ở trang trong)
-    systemChildren.push({ label: 'Hộp duyệt', path: '/admin/approvals', icon: <InboxIcon /> });
-
-    // Các menu hệ thống khác (Chỉ hiển thị cho admin và manager)
+    // 3. Hệ thống (Chỉ hiển thị cho admin và manager)
     if (isAdmin || isManager) {
-      systemChildren.push(
-        { label: 'Người dùng', path: '/admin/users', icon: <UserIcon /> },
-        { label: 'Phòng ban', path: '/admin/departments', icon: <DepartmentIcon /> },
-        { label: 'Danh mục (Nghề/Chứng chỉ)', path: '/admin/catalogs', icon: <DepartmentIcon /> },
-        { label: 'Cấu hình', path: '/admin/settings', icon: <SettingsIcon /> },
-        { label: 'Nhật ký hệ thống', path: '/admin/audit-logs', icon: <AuditIcon /> },
-        { label: 'Webhooks', path: '/admin/webhooks', icon: <WebhookIcon /> }
-      );
+      baseNav.push({
+        label: 'Hệ thống',
+        icon: <SettingsIcon />,
+        children: [
+          { label: 'Người dùng', path: '/admin/users', icon: <UserIcon /> },
+          { label: 'Phòng ban', path: '/admin/departments', icon: <DepartmentIcon /> },
+          { label: 'Danh mục (Nghề/Chứng chỉ)', path: '/admin/catalogs', icon: <DepartmentIcon /> },
+          { label: 'Cấu hình', path: '/admin/settings', icon: <SettingsIcon /> },
+          { label: 'Nhật ký hệ thống', path: '/admin/audit-logs', icon: <AuditIcon /> },
+          { label: 'Webhooks', path: '/admin/webhooks', icon: <WebhookIcon /> },
+        ],
+      });
     }
 
-    baseNav.push({
-      label: 'Hệ thống',
-      icon: <SettingsIcon />,
-      children: systemChildren
-    });
-
-    // 3. Thống kê & Báo cáo (Tất cả staff đều thấy)
+    // 4. Thống kê & Báo cáo (Tất cả staff đều thấy)
     baseNav.push({ label: 'Thống kê & Báo cáo', path: '/admin/reports', icon: <ReportIcon /> });
 
   } else {
@@ -302,7 +297,7 @@ function NavItemComponent({ item, isActive, handleNav, isMobile }: NavItemProps)
         borderRadius: 2,
         whiteSpace: 'nowrap',
         width: 'auto',
-        mr: isMobile ? 0 : 2, // Tăng khoảng cách margin-right giữa các nút tại đây
+        mr: isMobile ? 0 : 0.5,
         mb: isMobile ? 1 : 0,
         '&.Mui-selected': {
           bgcolor: 'primary.main',
@@ -501,60 +496,75 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
-            overflowX: 'auto',
-            px: 2,
-            py: 1,
-            // Auto hide scrollbar for sleekness
-            '&::-webkit-scrollbar': { display: 'none' },
-            msOverflowStyle: 'none',
-            scrollbarWidth: 'none',
+            overflow: 'hidden',
+            px: 1,
+            py: 0.5,
           }}
         >
-          <List
-            sx={{
-              display: 'flex',
-              flexDirection: 'row',
-              p: 0,
-              m: 0,
-              flexWrap: 'nowrap',
-              alignItems: 'center',
-            }}
-          >
-            {navItemsConfig.map((item) => (
+          {/* Item đầu tiên: cố định ở đầu bên trái */}
+          {navItemsConfig.length > 0 && (
+            <List sx={{ p: 0, m: 0, flexShrink: 0 }}>
               <NavItemComponent
-                key={item.label}
-                item={item}
+                key={navItemsConfig[0].label}
+                item={navItemsConfig[0]}
                 isActive={isActive}
                 handleNav={handleNav}
                 isMobile={false}
               />
-            ))}
-          </List>
-          <Box sx={{ flexGrow: 1, minWidth: 16 }} />
+            </List>
+          )}
 
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mr: 2 }}>
-            {canInstall && (
-              <Tooltip title="Cài đặt ứng dụng">
-                <Button
-                  size="small" variant="outlined" startIcon={<GetApp />}
-                  onClick={() => triggerInstall()}
-                  sx={{ display: { xs: 'none', sm: 'inline-flex' }, borderRadius: 2 }}
-                >
-                  Cài app
-                </Button>
-              </Tooltip>
-            )}
+          {/* Các item còn lại: dãn đều */}
+          {(() => {
+            const remainingCount = navItemsConfig.length - 1;
+            // Admin/TrainingOfficer nhiều item → chiếm hết không gian (flex:1)
+            // Manager/Worker ít item → để tự nhiên (flex:0), ghost spacer sẽ đẩy account sang phải
+            const isCompact = remainingCount <= 4;
+            return (
+              <List
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  justifyContent: 'space-evenly',
+                  p: 0,
+                  m: 0,
+                  flex: isCompact ? '0 0 45%' : 1,
+                  minWidth: 0,
+                  flexWrap: 'nowrap',
+                  alignItems: 'center',
+                }}
+              >
+                {navItemsConfig.slice(1).map((item) => (
+                  <NavItemComponent
+                    key={item.label}
+                    item={item}
+                    isActive={isActive}
+                    handleNav={handleNav}
+                    isMobile={false}
+                  />
+                ))}
+              </List>
+            );
+          })()}
+
+          {/* Ghost spacer vô hình: đẩy account luôn về phía phải màn hình */}
+          <Box sx={{ flex: 1 }} />
+
+          {/* Vùng account: cố định bên phải, không có đường gạch */}
+          <Stack
+            direction="row"
+            spacing={0.5}
+            alignItems="center"
+            sx={{ flexShrink: 0, pl: 1 }}
+          >
             <Tooltip title={mode === 'dark' ? 'Chế độ sáng' : 'Chế độ tối'}>
               <IconButton onClick={toggle} size="small" color="primary">
                 {mode === 'dark' ? <LightMode /> : <DarkMode />}
               </IconButton>
             </Tooltip>
-            <Box>
-              <NotificationBell />
-            </Box>
+            <NotificationBell />
+            <UserProfileMenu user={user} onLogout={handleLogout} />
           </Stack>
-
-          <UserProfileMenu user={user} onLogout={handleLogout} />
         </Box>
       )}
     </>
