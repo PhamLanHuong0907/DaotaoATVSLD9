@@ -59,6 +59,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useThemeMode } from '@/contexts/ThemeContext';
 import NotificationBell from '@/components/common/NotificationBell';
 import { onInstallAvailability, triggerInstall } from '@/utils/pwa';
+import { useTabContext } from '@/contexts/TabContext';
 
 const DRAWER_WIDTH = 260;
 
@@ -165,7 +166,6 @@ const getNavConfig = (user: any): NavItem[] => {
   ];
 
   if (isStaff) {
-    // 1. Quản lý khóa học & Quản lý kỳ thi (Chỉ hiển thị cho admin và training_officer)
     if (isAdmin || isTrainingOfficer) {
       baseNav.push(
         {
@@ -191,10 +191,8 @@ const getNavConfig = (user: any): NavItem[] => {
       );
     }
 
-    // 2. Hộp duyệt — hiển thị độc lập, cùng level với Quản lý kỳ thi (tất cả staff đều thấy)
     baseNav.push({ label: 'Hộp duyệt', path: '/admin/approvals', icon: <InboxIcon /> });
 
-    // 3. Hệ thống (Chỉ hiển thị cho admin và manager)
     if (isAdmin || isManager) {
       baseNav.push({
         label: 'Hệ thống',
@@ -210,11 +208,9 @@ const getNavConfig = (user: any): NavItem[] => {
       });
     }
 
-    // 4. Thống kê & Báo cáo (Tất cả staff đều thấy)
     baseNav.push({ label: 'Thống kê & Báo cáo', path: '/admin/reports', icon: <ReportIcon /> });
 
   } else {
-    // Menu cho worker (Người lao động)
     baseNav.push(
       {
         label: 'Học tập & Ôn luyện',
@@ -253,7 +249,7 @@ const getNavConfig = (user: any): NavItem[] => {
 interface NavItemProps {
   item: NavItem;
   isActive: (path?: string) => boolean;
-  handleNav: (path: string) => void;
+  handleNav: (path: string, title: string) => void;
   isMobile: boolean;
 }
 
@@ -275,7 +271,7 @@ function NavItemComponent({ item, isActive, handleNav, isMobile }: NavItemProps)
         setAnchorEl(e.currentTarget);
       }
     } else if (item.path) {
-      handleNav(item.path);
+      handleNav(item.path, item.label);
     }
   };
 
@@ -283,8 +279,8 @@ function NavItemComponent({ item, isActive, handleNav, isMobile }: NavItemProps)
     setAnchorEl(null);
   };
 
-  const handleChildClick = (path: string) => {
-    handleNav(path);
+  const handleChildClick = (path: string, label: string) => {
+    handleNav(path, label);
     handleClose();
   };
 
@@ -331,7 +327,7 @@ function NavItemComponent({ item, isActive, handleNav, isMobile }: NavItemProps)
               <ListItemButton
                 key={child.label}
                 selected={child.path ? isActive(child.path) : false}
-                onClick={() => child.path && handleChildClick(child.path)}
+                onClick={() => child.path && handleChildClick(child.path, child.label)}
                 sx={{
                   pl: 4,
                   borderRadius: 2,
@@ -368,7 +364,7 @@ function NavItemComponent({ item, isActive, handleNav, isMobile }: NavItemProps)
             <MenuItem
               key={child.label}
               selected={child.path ? isActive(child.path) : false}
-              onClick={() => child.path && handleChildClick(child.path)}
+              onClick={() => child.path && handleChildClick(child.path, child.label)}
               sx={{
                 borderRadius: 1,
                 mb: 0.5,
@@ -398,13 +394,15 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const { user, logout } = useAuth();
   const { mode, toggle } = useThemeMode();
 
+  const { openTab } = useTabContext();
+
   const [canInstall, setCanInstall] = useState(false);
   useEffect(() => onInstallAvailability(setCanInstall), []);
 
   const navItemsConfig = getNavConfig(user);
 
-  const handleNav = (path: string) => {
-    navigate(path);
+  const handleNav = (path: string, title: string) => {
+    openTab({ path, title });
     if (isMobile) onClose();
   };
 
@@ -415,8 +413,10 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     return location.pathname.startsWith(path);
   };
 
+  // SỬA CHỖ NÀY: Xóa bỏ URL cũ khỏi bộ nhớ đệm trước khi đăng xuất
   const handleLogout = () => {
-    logout();
+    navigate('/dashboard'); // 1. Bắt buộc chuyển về Dashboard
+    logout();               // 2. Clear token đăng xuất (hệ thống sẽ đẩy ra trang login)
     if (isMobile) onClose();
   };
 
@@ -500,7 +500,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             py: 0.5,
           }}
         >
-          {/* Item đầu tiên: cố định ở đầu bên trái */}
           {navItemsConfig.length > 0 && (
             <List sx={{ p: 0, m: 0, flexShrink: 0 }}>
               <NavItemComponent
@@ -513,11 +512,8 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             </List>
           )}
 
-          {/* Các item còn lại: dãn đều */}
           {(() => {
             const remainingCount = navItemsConfig.length - 1;
-            // Admin/TrainingOfficer nhiều item → chiếm hết không gian (flex:1)
-            // Manager/Worker ít item → để tự nhiên (flex:0), ghost spacer sẽ đẩy account sang phải
             const isCompact = remainingCount <= 4;
             return (
               <List
@@ -546,10 +542,8 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             );
           })()}
 
-          {/* Ghost spacer vô hình: đẩy account luôn về phía phải màn hình */}
           <Box sx={{ flex: 1 }} />
 
-          {/* Vùng account: cố định bên phải, không có đường gạch */}
           <Stack
             direction="row"
             spacing={0.5}

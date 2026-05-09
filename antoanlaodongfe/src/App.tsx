@@ -3,6 +3,7 @@ import { SnackbarProvider } from 'notistack';
 import { BrowserRouter } from 'react-router-dom';
 import { ThemeModeProvider } from '@/contexts/ThemeContext';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { TabProvider } from '@/contexts/TabContext';
 import AppRouter from '@/router';
 
 const queryClient = new QueryClient({
@@ -22,7 +23,10 @@ function App() {
         <SnackbarProvider maxSnack={3} autoHideDuration={4000} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
           <AuthProvider>
             <BrowserRouter>
-              <AppRouter />
+              {/* TabProvider phải nằm trong BrowserRouter vì dùng useNavigate */}
+              <TabProvider>
+                <AppRouter />
+              </TabProvider>
             </BrowserRouter>
           </AuthProvider>
         </SnackbarProvider>
