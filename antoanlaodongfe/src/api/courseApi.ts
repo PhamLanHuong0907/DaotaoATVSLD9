@@ -101,6 +101,7 @@ export interface CourseListFilters {
 export interface CourseListResponse {
   id: string;
   title: string;
+  description: string;
   occupation: string;
   skill_level: number;
   training_group: string;

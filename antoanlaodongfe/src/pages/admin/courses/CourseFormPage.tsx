@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import {
     Box, Button, Card, CardContent, MenuItem, Stack, TextField,
-    Typography, IconButton, Chip, Divider, Paper, Tooltip, LinearProgress,
+    Typography, IconButton, Chip, Divider, Tooltip, LinearProgress,
     Accordion, AccordionSummary, AccordionDetails, Autocomplete,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
@@ -43,7 +43,7 @@ export default function CourseFormPage() {
     const [objectives, setObjectives] = useState<string[]>(['']);
     const [occupation, setOccupation] = useState('');
     const [skillLevel, setSkillLevel] = useState(1);
-    const [trainingGroup, setTrainingGroup] = useState<TrainingGroup>('basic');
+    const [trainingGroup, setTrainingGroup] = useState<TrainingGroup>('atvsld');
     const [sourceDocIds, setSourceDocIds] = useState<string[]>([]);
     const [lessons, setLessons] = useState<LessonDraft[]>([]);
 

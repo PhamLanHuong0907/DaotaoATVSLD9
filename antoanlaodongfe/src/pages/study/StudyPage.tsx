@@ -199,9 +199,9 @@ export default function StudyPage() {
                         occupation={c.occupation}
                         skillLevel={c.skill_level}
                         trainingGroup={c.training_group}
-                        lessonCount={c.lesson_count ?? c.lessons?.length ?? 0}
+                        lessonCount={c.lesson_count}
                         expanded={expandedCourse === c.id}
-                        detail={courseDetail[c.id] || (c.lessons?.length ? c : undefined)}
+                        detail={courseDetail[c.id]}
                         loading={loadingCourseId === c.id}
                         onToggle={() => handleExpandCourse(c.id)}
                         isMandatory={c.is_mandatory}
