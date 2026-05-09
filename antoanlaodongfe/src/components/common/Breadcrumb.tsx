@@ -18,7 +18,7 @@ const routeMap: { prefix: string; label: string }[] = [
     { prefix: '/admin/documents', label: 'Quản lý tài liệu' },
     { prefix: '/admin/questions', label: 'Ngân hàng câu hỏi' },
     { prefix: '/admin/periods', label: 'Quản lý kỳ thi' },
-    { prefix: '/admin/exams', label: 'Quản lý bài thi' },
+    { prefix: '/admin/exams', label: 'Quản lý đề thi' },
     { prefix: '/admin/templates', label: 'Quản lý mẫu đề thi' }, // Đã sửa tên label cho chuẩn xác
     { prefix: '/admin/rooms', label: 'Quản lý phòng thi' },     // Đã sửa tên label cho chuẩn xác
     { prefix: '/admin/facilities', label: 'Cơ sở vật chất' },   // Đã sửa tên label cho chuẩn xác
@@ -53,7 +53,7 @@ const subLabels: Record<string, string> = {
     courses: 'Khóa học',
     documents: 'Tài liệu',
     questions: 'Câu hỏi',
-    exams: 'Bài thi',
+    exams: 'Đề thi',
     templates: 'Mẫu đề thi',
     rooms: 'Phòng thi',
     facilities: 'Cơ sở vật chất',
