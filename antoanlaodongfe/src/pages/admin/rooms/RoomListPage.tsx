@@ -224,61 +224,63 @@ export default function RoomListPage() {
                 {filteredRooms.map((r) => {
                   const unifiedStatus = getUnifiedStatus(r, 'room');
                   const approvalStatus = (r as any).approval_status || 'draft';
-                  const canModify = approvalStatus === 'draft' || approvalStatus === 'rejected';
+                    const canModify = approvalStatus === 'draft' || approvalStatus === 'rejected';
+                    const isOverdue = dayjs().isAfter(dayjs(r.scheduled_end));
+                    const canDelete = canModify || (approvalStatus === 'draft' && isOverdue);
 
-                  return (
-                    <TableRow key={r.id} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>{r.name}</Typography>
-                        {r.location && (
-                          <Typography variant="caption" color="text.secondary">{r.location}</Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>{deptMap[r.department_id]?.name || r.department_id}</TableCell>
-                      <TableCell>{examModeLabels[r.exam_mode]}</TableCell>
-                      <TableCell>{dayjs(r.scheduled_start).format('DD/MM/YYYY HH:mm')}</TableCell>
-                      <TableCell>{dayjs(r.scheduled_end).format('DD/MM/YYYY HH:mm')}</TableCell>
-                      <TableCell align="center">{r.candidates.length}/{r.capacity}</TableCell>
-                      <TableCell align="center">
-                        <Chip size="small" label={unifiedStatus.label} color={unifiedStatus.color} />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="Quản lý thí sinh">
-                          <IconButton size="small" onClick={() => navigate(`/admin/rooms/${r.id}`)}>
-                            <People fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        {r.exam_mode === 'onsite' && (
-                          <Tooltip title="In đề PDF">
-                            <IconButton size="small" color="primary" onClick={() => handlePrint(r.exam_id || '', r.name)}>
-                              <Print fontSize="small" />
+                    return (
+                      <TableRow key={r.id} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={500}>{r.name}</Typography>
+                          {r.location && (
+                            <Typography variant="caption" color="text.secondary">{r.location}</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>{deptMap[r.department_id]?.name || r.department_id}</TableCell>
+                        <TableCell>{examModeLabels[r.exam_mode]}</TableCell>
+                        <TableCell>{dayjs(r.scheduled_start).format('DD/MM/YYYY HH:mm')}</TableCell>
+                        <TableCell>{dayjs(r.scheduled_end).format('DD/MM/YYYY HH:mm')}</TableCell>
+                        <TableCell align="center">{r.candidates.length}/{r.capacity}</TableCell>
+                        <TableCell align="center">
+                          <Chip size="small" label={unifiedStatus.label} color={unifiedStatus.color} />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Tooltip title="Quản lý thí sinh">
+                            <IconButton size="small" onClick={() => navigate(`/admin/rooms/${r.id}`)}>
+                              <People fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                        )}
-                        {canModify && (
-                          <Tooltip title="Sửa">
-                            <IconButton size="small" onClick={() => navigate(`/admin/rooms/${r.id}/edit`)}>
-                              <Edit fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        {canModify && (
-                          <Tooltip title="Gửi yêu cầu duyệt">
-                            <IconButton size="small" color="primary" onClick={() => setSubmitId(r.id)}>
-                              <Send fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        {canModify && (
-                          <Tooltip title="Xoá">
-                            <IconButton size="small" color="error" onClick={() => setDeleteId(r.id)}>
-                              <Delete fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
+                          {r.exam_mode === 'onsite' && (
+                            <Tooltip title="In đề PDF">
+                              <IconButton size="small" color="primary" onClick={() => handlePrint(r.exam_id || '', r.name)}>
+                                <Print fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {canModify && (
+                            <Tooltip title="Sửa">
+                              <IconButton size="small" onClick={() => navigate(`/admin/rooms/${r.id}/edit`)}>
+                                <Edit fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {canModify && (
+                            <Tooltip title="Gửi yêu cầu duyệt">
+                              <IconButton size="small" color="primary" onClick={() => setSubmitId(r.id)}>
+                                <Send fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {canDelete && (
+                            <Tooltip title={isOverdue ? "Xoá (Đã quá hạn)" : "Xoá"}>
+                              <IconButton size="small" color="error" onClick={() => setDeleteId(r.id)}>
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
                 })}
               </TableBody>
             </Table>

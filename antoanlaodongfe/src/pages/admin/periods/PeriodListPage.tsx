@@ -106,66 +106,68 @@ export default function PeriodListPage() {
                   const unifiedStatus = getUnifiedStatus(p, 'period');
                   const approvalStatus = p.approval_status || 'draft';
                   const canModify = approvalStatus === 'draft' || approvalStatus === 'rejected';
+                  const isOverdue = dayjs().isAfter(dayjs(p.end_date));
+                  const canDelete = canModify || (approvalStatus === 'draft' && isOverdue);
 
-                  return (
-                    <TableRow key={p.id} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
-                      <TableCell><Typography variant="body2" fontWeight={500}>{p.name}</Typography></TableCell>
-                      <TableCell>{examTypeLabels[p.exam_type as ExamType]}</TableCell>
-                      <TableCell>{dayjs(p.start_date).format('DD/MM/YYYY HH:mm')}</TableCell>
-                      <TableCell>{dayjs(p.end_date).format('DD/MM/YYYY HH:mm')}</TableCell>
-                      <TableCell align="center">{p.department_ids.length || 'Tất cả'}</TableCell>
-                      <TableCell align="center">
-                        <Chip size="small" label={unifiedStatus.label} color={unifiedStatus.color} />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="Xem chi tiết kỳ thi">
-                          <IconButton size="small" onClick={() => navigate(`/admin/periods/${p.id}`)}>
-                            <Visibility fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={canModify ? "Sửa" : "Không thể sửa khi đã gửi duyệt hoặc được chấp thuận"}>
-                          <span>
-                            <IconButton 
-                              size="small" 
-                              onClick={() => navigate(`/admin/periods/${p.id}/edit`)}
-                              disabled={!canModify}
-                              sx={{ '&.Mui-disabled': { cursor: 'not-allowed', pointerEvents: 'auto' } }}
-                            >
-                              <Edit fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        
-                        <Tooltip title={canModify ? "Gửi yêu cầu duyệt" : "Đã gửi yêu cầu hoặc đã được duyệt"}>
-                          <span>
-                            <IconButton 
-                              size="small" 
-                              color="primary" 
-                              onClick={() => setSubmitId(p.id)}
-                              disabled={!canModify}
-                              sx={{ '&.Mui-disabled': { cursor: 'not-allowed', pointerEvents: 'auto' } }}
-                            >
-                              <Send fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        
-                        <Tooltip title={canModify ? "Xoá" : "Không thể xoá khi đã gửi duyệt hoặc được chấp thuận"}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => setDeleteId(p.id)}
-                              disabled={!canModify}
-                              sx={{ '&.Mui-disabled': { cursor: 'not-allowed', pointerEvents: 'auto' } }}
-                            >
-                              <Delete fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  );
+                        return (
+                          <TableRow key={p.id} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                            <TableCell><Typography variant="body2" fontWeight={500}>{p.name}</Typography></TableCell>
+                            <TableCell>{examTypeLabels[p.exam_type as ExamType]}</TableCell>
+                            <TableCell>{dayjs(p.start_date).format('DD/MM/YYYY HH:mm')}</TableCell>
+                            <TableCell>{dayjs(p.end_date).format('DD/MM/YYYY HH:mm')}</TableCell>
+                            <TableCell align="center">{p.department_ids.length || 'Tất cả'}</TableCell>
+                            <TableCell align="center">
+                              <Chip size="small" label={unifiedStatus.label} color={unifiedStatus.color} />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Tooltip title="Xem chi tiết kỳ thi">
+                                <IconButton size="small" onClick={() => navigate(`/admin/periods/${p.id}`)}>
+                                  <Visibility fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title={canModify ? "Sửa" : "Không thể sửa khi đã gửi duyệt hoặc được chấp thuận"}>
+                                <span>
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => navigate(`/admin/periods/${p.id}/edit`)}
+                                    disabled={!canModify}
+                                    sx={{ '&.Mui-disabled': { cursor: 'not-allowed', pointerEvents: 'auto' } }}
+                                  >
+                                    <Edit fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                              
+                              <Tooltip title={canModify ? "Gửi yêu cầu duyệt" : "Đã gửi yêu cầu hoặc đã được duyệt"}>
+                                <span>
+                                  <IconButton 
+                                    size="small" 
+                                    color="primary" 
+                                    onClick={() => setSubmitId(p.id)}
+                                    disabled={!canModify}
+                                    sx={{ '&.Mui-disabled': { cursor: 'not-allowed', pointerEvents: 'auto' } }}
+                                  >
+                                    <Send fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                              
+                              <Tooltip title={canDelete ? (isOverdue ? "Xoá (Đã quá hạn)" : "Xoá") : "Không thể xoá khi đã gửi duyệt hoặc được chấp thuận"}>
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => setDeleteId(p.id)}
+                                    disabled={!canDelete}
+                                    sx={{ '&.Mui-disabled': { cursor: 'not-allowed', pointerEvents: 'auto' } }}
+                                  >
+                                    <Delete fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </TableCell>
+                          </TableRow>
+                        );
                 })}
               </TableBody>
             </Table>

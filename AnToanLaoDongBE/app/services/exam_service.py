@@ -475,3 +475,17 @@ async def get_user_submissions(
     total = await ExamSubmission.find(query).count()
     subs = await ExamSubmission.find(query).sort("-submitted_at").skip(skip).limit(limit).to_list()
     return subs, total
+
+async def delete_exam(exam_id: str) -> bool:
+    exam = await Exam.get(PydanticObjectId(exam_id))
+    if not exam:
+        return False
+    
+    # Check if there are any submissions
+    sub_count = await ExamSubmission.find(ExamSubmission.exam_id == exam_id).count()
+    if sub_count > 0:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Không thể xóa đề thi đã có kết quả nộp bài.")
+        
+    await exam.delete()
+    return True

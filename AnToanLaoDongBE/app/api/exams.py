@@ -361,3 +361,10 @@ async def list_user_submissions(
         total=total, page=page, page_size=page_size,
         total_pages=math.ceil(total / page_size) if total > 0 else 0,
     )
+
+@router.delete("/{exam_id}", response_model=StatusResponse)
+async def delete_exam(exam_id: str):
+    success = await exam_service.delete_exam(exam_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    return StatusResponse(success=True, message="Exam deleted")

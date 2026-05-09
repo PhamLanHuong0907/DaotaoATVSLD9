@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 
+import dayjs from 'dayjs';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -261,79 +262,82 @@ export default function AdminExamListPage() {
                   const unifiedStatus = getUnifiedStatus(exam, 'exam');
                   const examStatus = (exam as any).approval_status || (exam as any).status || 'draft';
                   const canModify = examStatus === 'draft' || examStatus === 'rejected';
-                  return (
-                    <TableRow key={exam.id} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>{exam.name}</Typography>
-                        {exam.exam_period_name && (
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Kỳ thi: {exam.exam_period_name}
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Stack spacing={0.5}>
-                          <Chip label={examTypeLabels[exam.exam_type]} size="small" variant="outlined" />
-                          <Chip {...examKindChipProps(exam.exam_kind)} size="small" />
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">{exam.occupation}</Typography>
-                        <Typography variant="caption" color="text.secondary">Bậc {exam.skill_level}</Typography>
-                      </TableCell>
-                      <TableCell align="center">{exam.total_questions}</TableCell>
-                      <TableCell>{formatDuration(exam.duration_minutes)}</TableCell>
-                      <TableCell align="center">
-                        <Chip
-                          label={unifiedStatus.label}
-                          size="small"
-                          color={unifiedStatus.color}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
-                          <Tooltip title="Xem câu hỏi">
-                            <IconButton size="small" color="primary" onClick={() => navigate(`/admin/exams/${exam.id}`)}>
-                              <Quiz fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Xem bài nộp">
-                            <IconButton size="small" color="secondary" onClick={() => navigate(`/admin/exams/${exam.id}/submissions`)}>
-                              <Assignment fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                  const isOverdue = exam.scheduled_end ? dayjs().isAfter(dayjs(exam.scheduled_end)) : false;
+                  const canDelete = canModify || (examStatus === 'draft' && isOverdue);
 
-                          <Tooltip title={canModify ? "Gửi yêu cầu duyệt" : "Đã gửi yêu cầu hoặc đã được duyệt"}>
-                            <span>
-                              <IconButton
-                                size="small"
-                                color="primary"
-                                onClick={() => setSubmitId(exam.id)}
-                                disabled={!canModify}
-                                sx={{ '&.Mui-disabled': { cursor: 'not-allowed', pointerEvents: 'auto' } }}
-                              >
-                                <Send fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-
-                          <Tooltip title={canModify ? "Xóa" : "Không thể xóa khi đã gửi duyệt hoặc đã được duyệt"}>
-                            <span>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => setDeleteId(exam.id)}
-                                disabled={!canModify}
-                                sx={{ '&.Mui-disabled': { cursor: 'not-allowed', pointerEvents: 'auto' } }}
-                              >
-                                <Delete fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  );
+                          return (
+                            <TableRow key={exam.id} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                              <TableCell>
+                                <Typography variant="body2" fontWeight={500}>{exam.name}</Typography>
+                                {exam.exam_period_name && (
+                                  <Typography variant="caption" color="text.secondary" display="block">
+                                    Kỳ thi: {exam.exam_period_name}
+                                  </Typography>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Stack spacing={0.5}>
+                                  <Chip label={examTypeLabels[exam.exam_type]} size="small" variant="outlined" />
+                                  <Chip {...examKindChipProps(exam.exam_kind)} size="small" />
+                                </Stack>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2">{exam.occupation}</Typography>
+                                <Typography variant="caption" color="text.secondary">Bậc {exam.skill_level}</Typography>
+                              </TableCell>
+                              <TableCell align="center">{exam.total_questions}</TableCell>
+                              <TableCell>{formatDuration(exam.duration_minutes)}</TableCell>
+                              <TableCell align="center">
+                                <Chip
+                                  label={unifiedStatus.label}
+                                  size="small"
+                                  color={unifiedStatus.color}
+                                />
+                              </TableCell>
+                              <TableCell align="center">
+                                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                                  <Tooltip title="Xem câu hỏi">
+                                    <IconButton size="small" color="primary" onClick={() => navigate(`/admin/exams/${exam.id}`)}>
+                                      <Quiz fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Xem bài nộp">
+                                    <IconButton size="small" color="secondary" onClick={() => navigate(`/admin/exams/${exam.id}/submissions`)}>
+                                      <Assignment fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+        
+                                  <Tooltip title={canModify ? "Gửi yêu cầu duyệt" : "Đã gửi yêu cầu hoặc đã được duyệt"}>
+                                    <span>
+                                      <IconButton
+                                        size="small"
+                                        color="primary"
+                                        onClick={() => setSubmitId(exam.id)}
+                                        disabled={!canModify}
+                                        sx={{ '&.Mui-disabled': { cursor: 'not-allowed', pointerEvents: 'auto' } }}
+                                      >
+                                        <Send fontSize="small" />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+        
+                                  <Tooltip title={canDelete ? (isOverdue ? "Xóa (Đã quá hạn)" : "Xóa") : "Không thể xóa khi đã gửi duyệt hoặc đã được duyệt"}>
+                                    <span>
+                                      <IconButton
+                                        size="small"
+                                        color="error"
+                                        onClick={() => setDeleteId(exam.id)}
+                                        disabled={!canDelete}
+                                        sx={{ '&.Mui-disabled': { cursor: 'not-allowed', pointerEvents: 'auto' } }}
+                                      >
+                                        <Delete fontSize="small" />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          );
                 })}
               </TableBody>
             </Table>
