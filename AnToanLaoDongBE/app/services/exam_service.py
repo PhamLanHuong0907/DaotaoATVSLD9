@@ -1,0 +1,550 @@
+import logging
+from datetime import datetime, timezone
+from typing import Optional
+
+from beanie import PydanticObjectId
+
+from app.models.exam_template import ExamTemplate
+from app.models.exam import Exam, ExamSubmission, AnswerRecord
+from app.models.exam_period import ExamPeriod
+from app.models.enums import (
+    ExamType, ExamMode, ApprovalStatus, ResultClassification, ExamKind,
+)
+from app.schemas.exam_schemas import (
+    ExamTemplateCreate, ExamTemplateUpdate,
+    ExamGenerateRequest, ExamSubmitRequest,
+)
+from app.ai.exam_generator import generate_exam_from_template
+
+logger = logging.getLogger(__name__)
+
+
+# --- Exam Template Service ---
+
+async def create_template(data: ExamTemplateCreate) -> ExamTemplate:
+    template = ExamTemplate(**data.model_dump())
+    await template.insert()
+    return template
+
+
+async def get_templates(
+    exam_type: Optional[ExamType] = None,
+    status: Optional[ApprovalStatus] = None,
+    occupation: Optional[str] = None,
+    skill_level: Optional[int] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 20,
+) -> tuple[list[ExamTemplate], int]:
+    q = ExamTemplate.find_all()
+    if exam_type:
+        q = q.find(ExamTemplate.exam_type == exam_type)
+    if status:
+        q = q.find(ExamTemplate.status == status)
+    if occupation:
+        q = q.find(ExamTemplate.occupation == occupation)
+    if skill_level is not None:
+        q = q.find(ExamTemplate.skill_level == skill_level)
+    if search:
+        q = q.find({"name": {"$regex": search, "$options": "i"}})
+
+    total = await q.count()
+    templates = await q.sort("-created_at").skip(skip).limit(limit).to_list()
+    return templates, total
+
+
+async def get_template(template_id: str) -> Optional[ExamTemplate]:
+    return await ExamTemplate.get(PydanticObjectId(template_id))
+
+
+async def update_template(template_id: str, data: ExamTemplateUpdate) -> Optional[ExamTemplate]:
+    template = await ExamTemplate.get(PydanticObjectId(template_id))
+    if not template:
+        return None
+    update_data = data.model_dump(exclude_unset=True)
+    update_data["updated_at"] = datetime.now(timezone.utc)
+    await template.set(update_data)
+    return template
+
+
+async def update_template_status(
+    template_id: str,
+    status: ApprovalStatus,
+    reviewed_by: Optional[str] = None,
+) -> Optional[ExamTemplate]:
+    template = await ExamTemplate.get(PydanticObjectId(template_id))
+    if not template:
+        return None
+    update_data = {
+        "status": status,
+        "updated_at": datetime.now(timezone.utc),
+    }
+    if reviewed_by:
+        update_data["reviewed_by"] = reviewed_by
+    if status == ApprovalStatus.APPROVED:
+        update_data["approved_at"] = datetime.now(timezone.utc)
+    await template.set(update_data)
+    return template
+
+
+async def delete_template(template_id: str) -> bool:
+    template = await ExamTemplate.get(PydanticObjectId(template_id))
+    if not template:
+        return False
+    await template.delete()
+    return True
+
+
+# --- Exam Service ---
+
+async def generate_exam(data: ExamGenerateRequest) -> Exam:
+    """Generate an exam by selecting questions from bank based on template."""
+    template = await ExamTemplate.get(PydanticObjectId(data.template_id))
+    if not template:
+        raise ValueError("Template not found")
+    if template.status != ApprovalStatus.APPROVED:
+        raise ValueError("Template must be approved before generating exams")
+
+    # Generate questions
+    exam_questions = await generate_exam_from_template(template, data.exam_period_id)
+
+    if not exam_questions:
+        raise ValueError("No questions available to generate exam")
+
+    total_points = sum(q.points for q in exam_questions)
+
+    exam = Exam(
+        name=data.name,
+        exam_type=template.exam_type,
+        exam_mode=data.exam_mode,
+        template_id=data.template_id,
+        occupation=template.occupation,
+        skill_level=template.skill_level,
+        questions=exam_questions,
+        total_points=total_points,
+        duration_minutes=template.duration_minutes,
+        passing_score=template.passing_score,
+        excellent_threshold=template.excellent_threshold,
+        good_threshold=template.good_threshold,
+        average_threshold=template.average_threshold,
+        scheduled_date=data.scheduled_date,
+        exam_period_id=data.exam_period_id,
+        exam_kind=data.exam_kind,
+        created_by=data.created_by,
+    )
+    await exam.insert()
+    return exam
+
+
+async def update_exam_approval(
+    exam_id: str,
+    status: ApprovalStatus,
+    reviewer_id: str,
+    notes: Optional[str] = None,
+) -> Optional[Exam]:
+    """Approve / reject an Exam from the Approval Inbox.
+
+    Approving requires the exam's `scheduled_date` (if set) to be in the future,
+    matching the rule that ExamPeriod / ExamRoom / Exam can only be approved
+    before they start.
+    """
+    exam = await Exam.get(PydanticObjectId(exam_id))
+    if not exam:
+        return None
+
+    if status == ApprovalStatus.APPROVED and exam.scheduled_date:
+        scheduled = exam.scheduled_date
+        if scheduled.tzinfo is None:
+            scheduled = scheduled.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) >= scheduled:
+            from fastapi import HTTPException
+            raise HTTPException(400, "Không thể duyệt: thời gian thi đã bắt đầu hoặc kết thúc.")
+
+    update: dict = {
+        "status": status,
+        "reviewed_by": reviewer_id,
+        "updated_at": datetime.now(timezone.utc),
+    }
+    if notes:
+        update["review_notes"] = notes
+    if status == ApprovalStatus.APPROVED:
+        update["approved_at"] = datetime.now(timezone.utc)
+    await exam.set(update)
+
+    # Notify creator
+    try:
+        from app.services.notification_service import create_notification
+        from app.models.notification import NotificationType
+        title = "Đề thi đã được duyệt" if status == ApprovalStatus.APPROVED else "Đề thi bị từ chối"
+        await create_notification(
+            user_id=exam.created_by,
+            type=NotificationType.GENERAL,
+            title=title,
+            body=f"{exam.name}{(' — ' + notes) if notes else ''}",
+            link=f"/admin/exams/{exam.id}",
+        )
+    except Exception:
+        pass
+
+    return exam
+
+
+async def get_exams(
+    exam_type: Optional[ExamType] = None,
+    occupation: Optional[str] = None,
+    skill_level: Optional[int] = None,
+    exam_period_id: Optional[str] = None,
+    exam_kind: Optional[ExamKind] = None,
+    is_active: Optional[bool] = None,
+    status: Optional[ApprovalStatus] = None,
+    skip: int = 0,
+    limit: int = 20,
+) -> tuple[list[Exam], int]:
+    query: dict = {}
+    if exam_type:
+        query["exam_type"] = exam_type
+    if occupation:
+        query["occupation"] = occupation
+    if skill_level is not None:
+        query["skill_level"] = skill_level
+    if exam_period_id:
+        query["exam_period_id"] = str(exam_period_id)
+    if exam_kind:
+        query["exam_kind"] = exam_kind
+    if is_active is not None:
+        query["is_active"] = is_active
+    if status:
+        query["status"] = status
+
+    total = await Exam.find(query).count()
+    exams = await Exam.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
+    return exams, total
+
+
+async def get_exam(exam_id: str) -> Optional[Exam]:
+    return await Exam.get(PydanticObjectId(exam_id))
+
+
+async def get_exam_for_taking(exam_id: str) -> Optional[dict]:
+    """Get exam questions without correct answers (for test-taker)."""
+    exam = await Exam.get(PydanticObjectId(exam_id))
+    if not exam or not exam.is_active:
+        return None
+
+    questions = []
+    for q in exam.questions:
+        q_dict = {
+            "question_id": q.question_id,
+            "order": q.order,
+            "content": q.content,
+            "question_type": q.question_type,
+            "options": q.options,
+        }
+        questions.append(q_dict)
+
+    return {
+        "id": str(exam.id),
+        "name": exam.name,
+        "duration_minutes": exam.duration_minutes,
+        "total_questions": len(exam.questions),
+        "questions": questions,
+    }
+
+
+import re
+import unicodedata
+
+
+def _normalize_vi_text(text: str) -> str:
+    """Normalize Vietnamese text: lowercase, strip diacritics, collapse whitespace."""
+    text = unicodedata.normalize("NFD", text).encode("ascii", errors="ignore").decode("ascii")
+    text = re.sub(r"[^\w\s]", "", text).strip().lower()
+    return re.sub(r"\s+", " ", text)
+
+
+def _grade_essay_answer(student_answer: str, correct_answer: str, max_points: float) -> float:
+    """
+    Grade an essay/scenario answer using multi-strategy matching:
+    1. Key-point matching (| separated points in correct_answer)
+    2. Word-level overlap (Jaccard similarity) on normalized text
+    3. Substring containment for short keyword answers
+
+    Returns a score from 0.0 to max_points.
+    """
+    if not student_answer or not correct_answer:
+        return 0.0
+
+    student_norm = _normalize_vi_text(student_answer)
+    correct_norm = _normalize_vi_text(correct_answer)
+    student_words = set(student_norm.split())
+    correct_words = set(correct_norm.split())
+
+    # Strategy 1: Key-point matching (| separated)
+    key_points = [kp.strip() for kp in correct_answer.split("|") if kp.strip()]
+    if len(key_points) > 1:
+        matched = 0
+        for kp in key_points:
+            kp_norm = _normalize_vi_text(kp)
+            kp_words = set(kp_norm.split())
+            # Check if key point words are present in student answer
+            if kp_words & student_words:
+                matched += 1
+            elif kp_norm in student_norm:
+                matched += 1
+        if key_points:
+            return max_points * (matched / len(key_points))
+
+    # Strategy 2: Word-level Jaccard overlap
+    if student_words and correct_words:
+        overlap = len(student_words & correct_words)
+        union = len(student_words | correct_words)
+        jaccard = overlap / union if union > 0 else 0
+        # Also consider recall-style: how many correct words appear in student answer
+        recall = overlap / len(correct_words) if correct_words else 0
+        combined = 0.4 * jaccard + 0.6 * recall
+        if combined >= 0.3:  # Minimum threshold
+            return max_points * combined
+
+    # Strategy 3: Simple substring match
+    if correct_norm in student_norm or student_norm in correct_norm:
+        return max_points * 0.5
+
+    return 0.0
+
+async def submit_exam(exam_id: str, data: ExamSubmitRequest) -> ExamSubmission:
+    """Submit answers and auto-grade."""
+    exam = await Exam.get(PydanticObjectId(exam_id))
+    if not exam:
+        raise ValueError("Exam not found")
+    if not exam.is_active:
+        raise ValueError("Exam is not active")
+
+    # Build answer lookup from exam
+    correct_answers = {q.question_id: q for q in exam.questions}
+
+    # Grade answers
+    answers = []
+    total_correct = 0
+    total_points_earned = 0.0
+
+    for ans in data.answers:
+        exam_q = correct_answers.get(ans.question_id)
+        is_correct = False
+        points_earned = 0.0
+
+        if exam_q:
+            if exam_q.question_type in ("multiple_choice", "true_false"):
+                is_correct = (ans.selected_answer or "").strip().lower() == exam_q.correct_answer.strip().lower()
+            elif exam_q.question_type == "scenario_based":
+                if ans.text_answer and exam_q.correct_answer:
+                    points_earned = _grade_essay_answer(
+                        ans.text_answer, exam_q.correct_answer, exam_q.points
+                    )
+                    is_correct = points_earned >= exam_q.points * 0.5
+
+            if is_correct and exam_q.question_type != "scenario_based":
+                points_earned = exam_q.points
+
+            total_correct += 1 if is_correct else 0
+            total_points_earned += points_earned
+
+        answers.append(AnswerRecord(
+            question_id=ans.question_id,
+            question_order=ans.question_order,
+            selected_answer=ans.selected_answer,
+            text_answer=ans.text_answer,
+            is_correct=is_correct,
+            points_earned=points_earned,
+        ))
+
+    # Calculate score on scale of 10
+    total_questions = len(exam.questions)
+    score_10 = (total_points_earned / exam.total_points * 10) if exam.total_points > 0 else 0
+
+    # Classify result
+    classification = classify_result(score_10, exam)
+
+    now = datetime.now(timezone.utc)
+    submission = ExamSubmission(
+        exam_id=exam_id,
+        user_id=data.user_id,
+        answers=answers,
+        total_score=round(score_10, 2),
+        total_correct=total_correct,
+        total_questions=total_questions,
+        classification=classification,
+        submitted_at=now,
+        graded_at=now,
+        graded_by="system",
+        exam_kind=exam.exam_kind,
+    )
+    await submission.insert()
+
+    # Webhook fire-and-forget for any submission
+    try:
+        from app.services.webhook_service import fire_event
+        from app.models.webhook import WebhookEvent
+        await fire_event(WebhookEvent.EXAM_SUBMITTED, {
+            "submission_id": str(submission.id),
+            "exam_id": submission.exam_id,
+            "user_id": submission.user_id,
+            "total_score": submission.total_score,
+            "classification": submission.classification.value if submission.classification else None,
+        })
+        if submission.classification and submission.classification.value != "fail":
+            await fire_event(WebhookEvent.EXAM_PASSED, {
+                "submission_id": str(submission.id),
+                "exam_id": submission.exam_id,
+                "user_id": submission.user_id,
+                "total_score": submission.total_score,
+            })
+    except Exception:
+        pass
+
+    # Auto-issue certificate on pass + notify the user + award gamification points
+    try:
+        from app.services.certificate_service import issue_certificate_for_submission
+        from app.services.notification_service import create_notification
+        from app.services.gamification_service import on_exam_passed
+        from app.models.notification import NotificationType
+
+        if submission.classification and submission.classification.value != "fail":
+            await on_exam_passed(
+                submission.user_id,
+                submission.total_score,
+                submission.classification.value,
+            )
+
+        cert = await issue_certificate_for_submission(submission)
+        await create_notification(
+            user_id=submission.user_id,
+            type=NotificationType.EXAM_RESULT,
+            title=f"Có kết quả thi: {exam.name}",
+            body=f"Điểm: {submission.total_score}/10 — Xếp loại: {submission.classification.value}",
+            link=f"/exams/results/{submission.id}",
+        )
+        if cert:
+            await create_notification(
+                user_id=submission.user_id,
+                type=NotificationType.CERTIFICATE_ISSUED,
+                title="Bạn vừa được cấp chứng chỉ",
+                body=f"Mã chứng chỉ: {cert.code}",
+                link="/certificates",
+            )
+    except Exception as e:
+        logger.warning("Failed to auto-issue/notify after submission: %s", e)
+
+    return submission
+
+def classify_result(score: float, exam: Exam) -> ResultClassification:
+    """Classify exam result based on thresholds."""
+    if score >= exam.excellent_threshold:
+        return ResultClassification.EXCELLENT
+    elif score >= exam.good_threshold:
+        return ResultClassification.GOOD
+    elif score >= exam.average_threshold:
+        return ResultClassification.AVERAGE
+    else:
+        return ResultClassification.FAIL
+
+
+async def get_exam_submissions(
+    exam_id: str,
+    skip: int = 0,
+    limit: int = 50,
+) -> tuple[list[ExamSubmission], int]:
+    query = {"exam_id": exam_id}
+    total = await ExamSubmission.find(query).count()
+    subs = await ExamSubmission.find(query).sort("-submitted_at").skip(skip).limit(limit).to_list()
+    return subs, total
+
+
+async def get_submission(submission_id: str) -> Optional[ExamSubmission]:
+    return await ExamSubmission.get(PydanticObjectId(submission_id))
+
+
+async def get_user_submissions(
+    user_id: str,
+    exam_kind: Optional[ExamKind] = None,
+    skip: int = 0,
+    limit: int = 50,
+) -> tuple[list[ExamSubmission], int]:
+    query: dict = {"user_id": user_id}
+    if exam_kind:
+        query["exam_kind"] = exam_kind
+    total = await ExamSubmission.find(query).count()
+    subs = await ExamSubmission.find(query).sort("-submitted_at").skip(skip).limit(limit).to_list()
+    return subs, total
+
+async def delete_exam(exam_id: str) -> bool:
+    exam = await Exam.get(PydanticObjectId(exam_id))
+    if not exam:
+        return False
+    
+    # Check if there are any submissions
+    sub_count = await ExamSubmission.find(ExamSubmission.exam_id == exam_id).count()
+    if sub_count > 0:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Không thể xóa đề thi đã có kết quả nộp bài.")
+        
+    await exam.delete()
+    return True
+
+async def get_period_submissions(period_id: str) -> list[dict]:
+    """Get all submissions for an exam period with enriched user and room data."""
+    from app.models.user import User
+    from app.models.exam_room import ExamRoom
+    from app.models.department import Department
+    
+    # 1. Get all exams in this period
+    exams = await Exam.find(Exam.exam_period_id == period_id).to_list()
+    exam_ids = [str(e.id) for e in exams]
+    exam_map = {str(e.id): e for e in exams}
+    
+    if not exam_ids:
+        return []
+        
+    # 2. Get all submissions for these exams
+    submissions = await ExamSubmission.find({"exam_id": {"$in": exam_ids}}).sort("-submitted_at").to_list()
+    
+    # 3. Get all rooms in this period to link users to rooms
+    rooms = await ExamRoom.find(ExamRoom.exam_period_id == period_id).to_list()
+    
+    # Create a mapping of user_id -> room_name for this period
+    user_room_map = {}
+    for r in rooms:
+        for c in r.candidates:
+            user_room_map[c.user_id] = r.name
+            
+    # 4. Enrich submissions with User and Exam data
+    enriched = []
+    user_ids = list(set(s.user_id for s in submissions))
+    users = await User.find({"_id": {"$in": [PydanticObjectId(uid) for uid in user_ids]}}).to_list()
+    user_map = {str(u.id): u for u in users}
+    
+    # Get departments for mapping
+    depts = await Department.find_all().to_list()
+    dept_map = {str(d.id): d.name for d in depts}
+    
+    for s in submissions:
+        user = user_map.get(s.user_id)
+        exam = exam_map.get(s.exam_id)
+        
+        item = {
+            "id": str(s.id),
+            "user_id": s.user_id,
+            "employee_id": user.employee_id if user else "N/A",
+            "full_name": user.full_name if user else "Unknown",
+            "department": dept_map.get(user.department_id, "N/A") if user else "N/A",
+            "occupation": exam.occupation if exam else "N/A",
+            "skill_level": exam.skill_level if exam else 0,
+            "room_name": user_room_map.get(s.user_id, "N/A"),
+            "total_score": s.total_score,
+            "classification": s.classification.value if s.classification else "N/A",
+            "submitted_at": s.submitted_at,
+            "total_correct": s.total_correct,
+            "total_questions": s.total_questions,
+        }
+        enriched.append(item)
+        
+    return enriched
