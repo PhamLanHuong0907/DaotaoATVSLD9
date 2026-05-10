@@ -10,6 +10,7 @@ import dayjs from 'dayjs';
 
 import PageHeader from '@/components/common/PageHeader';
 import { departmentApi } from '@/api/departmentApi';
+import { occupationApi } from '@/api/catalogApi'; // 1. Import occupationApi
 import {
   useExamPeriod,
   useCreateExamPeriod,
@@ -31,9 +32,16 @@ export default function PeriodFormPage() {
   const { enqueueSnackbar } = useSnackbar();
 
   const { data: period } = useExamPeriod(periodId || '');
+
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
     queryFn: () => departmentApi.list(),
+  });
+
+  // 2. Fetch danh sách nghề từ hệ thống
+  const { data: occupations = [] } = useQuery({
+    queryKey: ['occupations'],
+    queryFn: () => occupationApi.list(true),
   });
 
   const create = useCreateExamPeriod();
@@ -67,7 +75,6 @@ export default function PeriodFormPage() {
   }, [period]);
 
   const handleSubmit = async () => {
-    // 1. Thêm đoạn Validate thời gian bắt đầu ở đây
     const now = dayjs();
     const startDate = dayjs(form.start_date);
     const endDate = dayjs(form.end_date);
@@ -167,18 +174,20 @@ export default function PeriodFormPage() {
               )}
             />
 
+            {/* 3. Cập nhật thẻ Autocomplete lấy options từ API */}
             <Autocomplete
-              multiple freeSolo options={[] as string[]}
+              multiple
+              options={occupations.map(o => o.name)} // Trích xuất list tên nghề từ data
               value={form.target_occupations || []}
               onChange={(_, v) => setForm({ ...form, target_occupations: v as string[] })}
-              renderValue={(value, getItemProps) =>
+              renderTags={(value, getTagProps) => // Sửa renderValue thành renderTags cho chuẩn UI Autocomplete
                 value.map((option, index) => {
-                  const { key, ...chipProps } = getItemProps({ index });
+                  const { key, ...chipProps } = getTagProps({ index });
                   return <Chip key={key} label={option} {...chipProps} />;
                 })
               }
               renderInput={(params) => (
-                <TextField {...params} label="Nghề áp dụng (nhập rồi Enter)" />
+                <TextField {...params} label="Nghề áp dụng (để trống = tất cả)" />
               )}
             />
 
