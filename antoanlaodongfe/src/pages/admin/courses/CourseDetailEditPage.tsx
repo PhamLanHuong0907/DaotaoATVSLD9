@@ -28,7 +28,14 @@ import { trainingGroupLabels } from '@/utils/vietnameseLabels';
 import { formatDateTime } from '@/utils/formatters';
 import LessonMarkdown from '@/components/common/LessonMarkdown';
 import RichTextEditor from '@/components/common/RichTextEditor';
+import { marked } from 'marked';
+import TurndownService from 'turndown';
 
+// Khởi tạo Turndown để chuyển từ HTML sang Markdown
+const turndownService = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+});
 /** Build full image URL from the relative path returned by backend */
 function imageUrl(path: string): string {
   // path like "/api/v1/images/course_001_lesson1_abc.png"
@@ -236,19 +243,37 @@ export default function CourseDetailEditPage() {
   };
   const openEditLesson = (l: LessonResponse) => {
     setEditingLesson(l);
-    setLessonForm({ ...l });
+    // Convert toàn bộ nội dung sang HTML trước khi đưa vào form
+    setLessonForm({
+      ...l,
+      theory: l.theory ? (marked.parse(l.theory) as string) : '',
+      scenario: l.scenario ? (marked.parse(l.scenario) as string) : '',
+      safety_notes: l.safety_notes ? (marked.parse(l.safety_notes) as string) : '',
+    });
     setLessonDialogOpen(true);
   };
   const saveLessonForm = () => {
     const existing = course?.lessons ?? [];
+
+    // Chuyển đổi nội dung từ HTML về Markdown trước khi lưu
+    const formattedLesson: LessonResponse = {
+      ...lessonForm,
+      theory: lessonForm.theory ? turndownService.turndown(lessonForm.theory) : '',
+      scenario: lessonForm.scenario ? turndownService.turndown(lessonForm.scenario) : '',
+      safety_notes: lessonForm.safety_notes ? turndownService.turndown(lessonForm.safety_notes) : '',
+    };
+
     let updated: LessonResponse[];
     if (editingLesson) {
-      updated = existing.map((l) => (l.order === editingLesson.order ? lessonForm : l));
+      updated = existing.map((l) => (l.order === editingLesson.order ? formattedLesson : l));
     } else {
-      updated = [...existing, lessonForm];
+      updated = [...existing, formattedLesson];
     }
+
     updated.sort((a, b) => a.order - b.order);
-    saveLessonsMut.mutate(updated, { onSuccess: () => setLessonDialogOpen(false) });
+    saveLessonsMut.mutate(updated, {
+      onSuccess: () => setLessonDialogOpen(false)
+    });
   };
   const deleteLesson = (order: number) => {
     if (!confirm(`Xoá bài học #${order}?`)) return;

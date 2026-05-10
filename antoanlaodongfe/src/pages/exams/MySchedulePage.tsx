@@ -41,7 +41,7 @@ export default function MySchedulePage() {
       />
 
       <Tabs value={view} onChange={(_, v) => setView(v)} sx={{ mb: 2 }}>
-        <Tab value="list" label="Danh sách" />
+
         <Tab value="calendar" label="Lịch tuần/tháng" />
       </Tabs>
 
